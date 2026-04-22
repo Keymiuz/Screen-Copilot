@@ -1,0 +1,8 @@
+node_modules/
+out/
+release/
+dist/
+*.log
+*.local
+.env.local
+.DS_Store
