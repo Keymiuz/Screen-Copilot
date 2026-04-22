@@ -14,6 +14,7 @@ import {
 } from 'electron'
 import { captureActiveScreen, ScreenshotPayload } from './screenshot'
 import { streamGeminiQuery } from './googleClient'
+import { fetchRemoteDocument } from './documentFetcher'
 
 interface AppSettings {
   googleApiKey: string
@@ -39,10 +40,17 @@ interface SettingsStore {
 interface SendMessagePayload {
   message: string
   imageBase64?: string
+  useGoogleSearch?: boolean
   history?: Array<{
     role: 'user' | 'assistant'
     content: string
   }>
+}
+
+interface SummarizeUrlPayload {
+  url: string
+  useGoogleSearch?: boolean
+  history?: SendMessagePayload['history']
 }
 
 const WINDOW_SIZE = {
@@ -352,6 +360,7 @@ function streamCloudResponse(streamId: string, payload: SendMessagePayload): voi
         settings: getSettings(),
         userMessage: payload.message,
         imageBase64: payload.imageBase64,
+        useGoogleSearch: payload.useGoogleSearch,
         history: payload.history ?? []
       })) {
         target.send('chat:token', { streamId, token })
@@ -360,6 +369,67 @@ function streamCloudResponse(streamId: string, payload: SendMessagePayload): voi
       target.send('chat:done', { streamId })
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Falha ao chamar o Gemini.'
+      target.send('chat:error', { streamId, message })
+    }
+  })()
+}
+
+function buildUrlSummaryPrompt(document: Awaited<ReturnType<typeof fetchRemoteDocument>>): string {
+  if (document.attachment) {
+    return [
+      'Resuma o documento anexado em portugues brasileiro.',
+      `URL: ${document.url}`,
+      `Titulo/arquivo: ${document.title}`,
+      '',
+      'Formato desejado:',
+      '- 4 a 6 bullets com os pontos principais.',
+      '- Dados, precos, prazos ou numeros importantes quando existirem.',
+      '- Uma frase final com a conclusao pratica.',
+      '- Se a URL nao puder ser lida completamente, diga isso claramente.'
+    ].join('\n')
+  }
+
+  return [
+    'Resuma o conteudo da URL abaixo em portugues brasileiro.',
+    `URL: ${document.url}`,
+    `Titulo: ${document.title}`,
+    '',
+    'Formato desejado:',
+    '- 4 a 6 bullets com os pontos principais.',
+    '- Dados, precos, prazos ou numeros importantes quando existirem.',
+    '- Uma frase final com a conclusao pratica.',
+    '- Se o texto parecer incompleto, diga isso claramente.',
+    '',
+    'Conteudo extraido:',
+    document.text
+  ].join('\n')
+}
+
+function streamUrlSummaryResponse(streamId: string, payload: SummarizeUrlPayload): void {
+  const target = overlayWindow?.webContents
+
+  if (!target) {
+    return
+  }
+
+  void (async () => {
+    try {
+      const document = await fetchRemoteDocument(payload.url)
+
+      for await (const token of streamGeminiQuery({
+        settings: getSettings(),
+        userMessage: buildUrlSummaryPrompt(document),
+        attachments: document.attachment ? [document.attachment] : undefined,
+        useGoogleSearch: payload.useGoogleSearch,
+        history: payload.history ?? []
+      })) {
+        target.send('chat:token', { streamId, token })
+      }
+
+      target.send('chat:done', { streamId })
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Nao consegui buscar ou resumir essa URL.'
       target.send('chat:error', { streamId, message })
     }
   })()
@@ -374,6 +444,12 @@ function registerIpcHandlers(): void {
   ipcMain.handle('chat:send-message', (_event, payload: SendMessagePayload) => {
     const streamId = randomUUID()
     setTimeout(() => streamCloudResponse(streamId, payload), 0)
+    return { streamId }
+  })
+
+  ipcMain.handle('chat:summarize-url', (_event, payload: SummarizeUrlPayload) => {
+    const streamId = randomUUID()
+    setTimeout(() => streamUrlSummaryResponse(streamId, payload), 0)
     return { streamId }
   })
 

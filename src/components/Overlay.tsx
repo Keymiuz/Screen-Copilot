@@ -17,12 +17,14 @@ export function Overlay(): JSX.Element {
   const isStreaming = useChatStore((state) => state.isStreaming)
 
   const [input, setInput] = useState('')
+  const [urlInput, setUrlInput] = useState('')
+  const [webSearchEnabled, setWebSearchEnabled] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [isPinned, setIsPinned] = useState(true)
   const listEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
 
-  const { sendMessage } = useChat()
+  const { sendMessage, summarizeUrl } = useChat()
   const { capture, isCapturing, flash } = useScreenshot()
   const tokenCount = useMemo(() => estimateTokenCount(messages), [messages])
 
@@ -71,7 +73,14 @@ export function Overlay(): JSX.Element {
     event?.preventDefault()
     const nextMessage = input
     setInput('')
-    await sendMessage(nextMessage)
+    await sendMessage(nextMessage, { useGoogleSearch: webSearchEnabled })
+  }
+
+  async function handleUrlSubmit(event?: FormEvent<HTMLFormElement>): Promise<void> {
+    event?.preventDefault()
+    const nextUrl = urlInput
+    setUrlInput('')
+    await summarizeUrl(nextUrl, { useGoogleSearch: webSearchEnabled })
   }
 
   function handleInputKeyDown(event: KeyboardEvent<HTMLTextAreaElement>): void {
@@ -94,7 +103,7 @@ export function Overlay(): JSX.Element {
   return (
     <main
       className={[
-        'relative h-screen w-screen overflow-hidden rounded-xl border border-white/10 bg-surface-glass text-zinc-100 shadow-overlay backdrop-blur-2xl',
+        'relative flex h-screen w-screen flex-col overflow-hidden rounded-xl border border-white/10 bg-surface-glass text-zinc-100 shadow-overlay backdrop-blur-2xl',
         'animate-overlayIn',
         flash ? 'animate-borderFlash' : ''
       ].join(' ')}
@@ -140,12 +149,32 @@ export function Overlay(): JSX.Element {
         <ScreenThumb screenshot={lastScreenshot} isCapturing={isCapturing} onCapture={() => void capture()} />
       </section>
 
-      <section className="scrollbar-soft flex h-[318px] flex-col gap-3 overflow-y-auto px-4 py-4">
+      <form onSubmit={(event) => void handleUrlSubmit(event)} className="border-b border-white/10 px-3 py-2.5">
+        <div className="flex items-center gap-2">
+          <input
+            type="url"
+            value={urlInput}
+            onChange={(event) => setUrlInput(event.target.value)}
+            placeholder="Cole uma URL ou PDF online para resumir"
+            className="app-region-no-drag h-10 min-w-0 flex-1 rounded-lg border border-white/10 bg-black/25 px-3 text-xs text-zinc-100 outline-none transition placeholder:text-zinc-500 focus:border-cyan-300"
+          />
+          <button
+            type="submit"
+            disabled={!urlInput.trim() || isStreaming}
+            className="app-region-no-drag grid h-10 w-10 shrink-0 place-items-center rounded-lg border border-white/10 text-zinc-300 transition hover:border-cyan-300/60 hover:text-cyan-200 disabled:cursor-not-allowed disabled:opacity-50"
+            title="Resumir URL"
+          >
+            <DocumentIcon />
+          </button>
+        </div>
+      </form>
+
+      <section className="scrollbar-soft flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 py-4">
         {messages.length === 0 ? (
           <div className="flex h-full flex-col justify-center">
-            <p className="text-sm font-medium text-zinc-200">Pergunte sobre o que esta na tela.</p>
+            <p className="text-sm font-medium text-zinc-200">Pergunte sobre a tela, uma URL ou a web.</p>
             <p className="mt-1 max-w-[28rem] text-xs leading-relaxed text-zinc-500">
-              Cloud via Gemini esta ligado. Capture a tela e pergunte sobre o que estiver visivel.
+              Cloud via Gemini esta ligado. Ative a busca para precos e informacoes atuais.
             </p>
           </div>
         ) : (
@@ -165,6 +194,19 @@ export function Overlay(): JSX.Element {
             placeholder="Pergunte sobre o que esta na tela..."
             className="app-region-no-drag min-h-12 flex-1 resize-none rounded-lg border border-white/10 bg-black/25 px-3 py-2 text-sm leading-relaxed text-zinc-100 outline-none transition placeholder:text-zinc-500 focus:border-cyan-300"
           />
+          <button
+            type="button"
+            onClick={() => setWebSearchEnabled((current) => !current)}
+            className={[
+              'app-region-no-drag grid h-12 w-12 shrink-0 place-items-center rounded-lg border transition',
+              webSearchEnabled
+                ? 'border-lime-300/60 bg-lime-300/15 text-lime-200'
+                : 'border-white/10 text-zinc-400 hover:border-lime-300/50 hover:text-lime-200'
+            ].join(' ')}
+            title={webSearchEnabled ? 'Google Search ligado' : 'Usar Google Search'}
+          >
+            <SearchIcon />
+          </button>
           <button
             type="button"
             onClick={clearHistory}
@@ -260,6 +302,29 @@ function SendIcon(): JSX.Element {
         strokeLinecap="round"
         strokeLinejoin="round"
       />
+    </svg>
+  )
+}
+
+function DocumentIcon(): JSX.Element {
+  return (
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M7 3h7l5 5v13H7a2 2 0 01-2-2V5a2 2 0 012-2z"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinejoin="round"
+      />
+      <path d="M14 3v6h5M9 13h6M9 17h6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+function SearchIcon(): JSX.Element {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <circle cx="11" cy="11" r="6" stroke="currentColor" strokeWidth="2" />
+      <path d="M16 16l4 4" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" />
     </svg>
   )
 }

@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { clipboard, contextBridge, ipcRenderer } from 'electron'
 
 interface AppSettings {
   googleApiKey: string
@@ -25,10 +25,17 @@ interface ScreenshotPayload {
 interface SendMessagePayload {
   message: string
   imageBase64?: string
+  useGoogleSearch?: boolean
   history?: Array<{
     role: 'user' | 'assistant'
     content: string
   }>
+}
+
+interface SummarizeUrlPayload {
+  url: string
+  useGoogleSearch?: boolean
+  history?: SendMessagePayload['history']
 }
 
 interface TokenPayload {
@@ -62,6 +69,12 @@ contextBridge.exposeInMainWorld('screenMind', {
     subscribe('screenshot:captured', callback),
   sendMessage: (payload: SendMessagePayload): Promise<{ streamId: string }> =>
     ipcRenderer.invoke('chat:send-message', payload),
+  summarizeUrl: (payload: SummarizeUrlPayload): Promise<{ streamId: string }> =>
+    ipcRenderer.invoke('chat:summarize-url', payload),
+  copyText: (value: string): Promise<void> => {
+    clipboard.writeText(value)
+    return Promise.resolve()
+  },
   onToken: (callback: (payload: TokenPayload) => void): Unsubscribe =>
     subscribe('chat:token', callback),
   onStreamDone: (callback: (payload: StreamDonePayload) => void): Unsubscribe =>
