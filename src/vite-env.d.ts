@@ -6,6 +6,7 @@ import type {
   ScreenshotPayload,
   SendMessagePayload,
   StreamDonePayload,
+  SummarizeUrlPayload,
   TokenPayload
 } from './types'
 
@@ -17,6 +18,8 @@ declare global {
       captureScreen: () => Promise<ScreenshotPayload | null>
       onScreenshot: (callback: (payload: ScreenshotPayload) => void) => Unsubscribe
       sendMessage: (payload: SendMessagePayload) => Promise<{ streamId: string }>
+      summarizeUrl: (payload: SummarizeUrlPayload) => Promise<{ streamId: string }>
+      copyText: (value: string) => Promise<void>
       onToken: (callback: (payload: TokenPayload) => void) => Unsubscribe
       onStreamDone: (callback: (payload: StreamDonePayload) => void) => Unsubscribe
       onChatError: (callback: (payload: ChatErrorPayload) => void) => Unsubscribe
