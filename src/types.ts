@@ -34,6 +34,13 @@ export interface ChatMessage {
 export interface SendMessagePayload {
   message: string
   imageBase64?: string
+  useGoogleSearch?: boolean
+  history?: Array<Pick<ChatMessage, 'role' | 'content'>>
+}
+
+export interface SummarizeUrlPayload {
+  url: string
+  useGoogleSearch?: boolean
   history?: Array<Pick<ChatMessage, 'role' | 'content'>>
 }
 

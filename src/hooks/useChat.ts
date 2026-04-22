@@ -11,7 +11,8 @@ function createId(prefix: string): string {
 }
 
 export function useChat(): {
-  sendMessage: (message: string) => Promise<void>
+  sendMessage: (message: string, options?: { useGoogleSearch?: boolean }) => Promise<void>
+  summarizeUrl: (url: string, options?: { useGoogleSearch?: boolean }) => Promise<void>
 } {
   const streamMap = useRef(new Map<string, string>())
 
@@ -69,9 +70,17 @@ export function useChat(): {
     }
   }, [])
 
-  const sendMessage = useCallback(
-    async (message: string) => {
-      const trimmed = message.trim()
+  const startAssistantStream = useCallback(
+    async (
+      userContent: string,
+      startStream: (
+        history: Array<{
+          role: 'user' | 'assistant'
+          content: string
+        }>
+      ) => Promise<{ streamId: string }>
+    ) => {
+      const trimmed = userContent.trim()
 
       if (!trimmed) {
         return
@@ -102,11 +111,7 @@ export function useChat(): {
           .messages.slice(-6)
           .map(({ role, content }) => ({ role, content }))
 
-        const { streamId } = await window.screenMind.sendMessage({
-          message: trimmed,
-          imageBase64: lastScreenshot?.base64,
-          history
-        })
+        const { streamId } = await startStream(history)
 
         streamMap.current.set(streamId, assistantId)
       } catch (error) {
@@ -119,8 +124,43 @@ export function useChat(): {
         setStreaming(false)
       }
     },
-    [addMessage, lastScreenshot, setStreaming]
+    [addMessage, setStreaming]
   )
 
-  return { sendMessage }
+  const sendMessage = useCallback(
+    async (message: string, options?: { useGoogleSearch?: boolean }) => {
+      const trimmed = message.trim()
+
+      await startAssistantStream(trimmed, (history) =>
+        window.screenMind.sendMessage({
+          message: trimmed,
+          imageBase64: lastScreenshot?.base64,
+          useGoogleSearch: options?.useGoogleSearch,
+          history
+        })
+      )
+    },
+    [lastScreenshot, startAssistantStream]
+  )
+
+  const summarizeUrl = useCallback(
+    async (url: string, options?: { useGoogleSearch?: boolean }) => {
+      const trimmed = url.trim()
+
+      if (!trimmed) {
+        return
+      }
+
+      await startAssistantStream(`Resumir URL: ${trimmed}`, (history) =>
+        window.screenMind.summarizeUrl({
+          url: trimmed,
+          useGoogleSearch: options?.useGoogleSearch,
+          history
+        })
+      )
+    },
+    [startAssistantStream]
+  )
+
+  return { sendMessage, summarizeUrl }
 }
