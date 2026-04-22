@@ -1,16 +1,32 @@
-# ScreenMind / Screen Copilot
+# Screen Copilot Suite
 
-**ScreenMind** is a desktop AI copilot that sees your screen, captures the current visual context, and answers questions about what is visible without making you copy, paste, or describe the situation manually.
+This repository contains two AI copilot experiments built around the same idea: context should come from what the user is already doing, not from manual copy/paste.
 
-**ScreenMind** e um copiloto desktop com IA que enxerga sua tela, captura o contexto visual atual e responde perguntas sobre o que esta visivel sem que voce precise copiar, colar ou explicar tudo manualmente.
+- **ScreenMind**: an Electron desktop app that sees the current screen and answers visual questions.
+- **MindSide**: a Chrome Side Panel extension MVP that captures meeting-tab audio, transcribes it with Gemini, and generates a meeting summary.
 
-> Built as a portfolio project to demonstrate Electron, React, TypeScript, secure IPC, screenshot processing, streaming AI responses, and desktop UX.
+**Screen Copilot Suite** e um projeto de portfolio com dois caminhos de produto: um app desktop que entende a tela inteira e uma extensao Chrome que testa a experiencia de copiloto em reunioes.
+
+> Built to demonstrate Electron, Chrome Extensions MV3, React, TypeScript, secure IPC/message passing, media capture, Gemini multimodal APIs, and polished product UX.
 
 ![ScreenMind icon](assets/icon.png)
 
-## Demo Concept
+## Demo Concepts
 
-Press a global shortcut, ask a question, and get a contextual answer based on the latest screen capture.
+ScreenMind desktop:
+
+- Press a global shortcut.
+- Capture the current screen.
+- Ask a question about what is visible.
+- Get a streamed Gemini response.
+
+MindSide meeting extension:
+
+- Open a Google Meet, Microsoft Teams web, or Zoom web tab.
+- Open the Chrome side panel.
+- Start meeting capture.
+- Watch transcript chunks appear.
+- Stop and generate a markdown summary.
 
 Example use cases:
 
@@ -18,6 +34,7 @@ Example use cases:
 - Ask for help understanding visible code.
 - Ask for a quick summary of a dashboard, document, or webpage.
 - Ask what action to take next based on the UI currently open.
+- Capture meeting audio and turn it into notes, decisions, and action items.
 
 ## Current Status
 
@@ -36,7 +53,19 @@ This project already includes the core desktop foundation:
 - Local development API key support through `.env.local`.
 - Production build output for Windows as an unsigned unpacked app.
 
+It also includes the first Chrome extension MVP:
+
+- Manifest V3 Chrome extension in `apps/extension`.
+- Native Chrome Side Panel UI.
+- Meeting-tab detection for Google Meet, Teams web, and Zoom web.
+- `chrome.tabCapture` audio capture coordinated by a background service worker.
+- Offscreen document with `MediaRecorder` for 15-second `audio/webm` chunks.
+- Gemini transcription and summary generation.
+- Encrypted Google API key storage using Web Crypto + IndexedDB + `chrome.storage.local`.
+
 ## How It Works
+
+### ScreenMind Desktop
 
 1. The Electron main process registers a global shortcut.
 2. When the shortcut is pressed, ScreenMind captures the active display.
@@ -58,6 +87,27 @@ flowchart LR
   H --> I["Token-by-token chat response"]
 ```
 
+### MindSide Meeting Extension
+
+1. The extension action opens a native Chrome Side Panel.
+2. The background service worker detects whether the active tab is a meeting.
+3. The user explicitly starts capture.
+4. The background worker creates an offscreen document and requests a tab audio stream ID.
+5. The offscreen document records short audio chunks with `MediaRecorder`.
+6. The background worker sends each audio chunk to Gemini for transcription.
+7. The side panel displays transcript chunks and generates a summary after Stop.
+
+```mermaid
+flowchart LR
+  A["Chrome side panel"] --> B["Background service worker"]
+  B --> C["tabCapture stream ID"]
+  C --> D["Offscreen MediaRecorder"]
+  D --> E["audio/webm chunks"]
+  E --> F["Gemini transcription"]
+  F --> G["Transcript feed"]
+  G --> H["Final summary"]
+```
+
 ## Tech Stack
 
 - [Electron](https://www.electronjs.org/) for the desktop shell, tray, global shortcuts, and screen capture.
@@ -68,11 +118,15 @@ flowchart LR
 - [Sharp](https://sharp.pixelplumbing.com/) for screenshot resizing and JPEG conversion.
 - [Gemini API](https://ai.google.dev/) for multimodal AI responses.
 - [electron-store](https://github.com/sindresorhus/electron-store) for local settings.
+- [Chrome Extensions MV3](https://developer.chrome.com/docs/extensions/develop/migrate/what-is-mv3) for the browser extension.
+- [CRXJS](https://crxjs.dev/vite-plugin) for Vite-powered extension builds.
 
 ## Project Structure
 
 ```text
 ScreenCopilot/
++-- apps/
+|   +-- extension/        # MindSide Chrome meeting MVP
 +-- electron/
 |   +-- main.ts           # Electron app, overlay window, tray, hotkey, IPC
 |   +-- preload.ts        # Secure bridge between main and renderer
@@ -106,7 +160,9 @@ ScreenCopilot/
 
 ScreenMind currently runs in cloud mode using Gemini. When you send a message, the current prompt and the latest captured screenshot can be sent to Google Gemini for analysis.
 
-The app does **not** hardcode API keys in source code. For development, keys can be placed in `.env.local`, which is ignored by Git. In the app UI, keys are saved through Electron `safeStorage` when available.
+MindSide currently sends short meeting audio chunks to Gemini for transcription and sends the accumulated transcript to Gemini for the final summary.
+
+The project does **not** hardcode API keys in source code. For desktop development, keys can be placed in `.env.local`, which is ignored by Git. In the desktop app UI, keys are saved through Electron `safeStorage` when available. In the extension, keys are encrypted with Web Crypto before being stored in Chrome extension storage.
 
 Planned privacy improvements:
 
@@ -120,7 +176,7 @@ Planned privacy improvements:
 - npm
 - A Google Gemini API key
 
-## Local Development
+## ScreenMind Desktop Development
 
 Install dependencies:
 
@@ -147,7 +203,7 @@ Run the app in development mode:
 npm run dev
 ```
 
-## Build
+## ScreenMind Desktop Build
 
 Run:
 
@@ -162,6 +218,31 @@ release/win-unpacked/ScreenMind.exe
 ```
 
 This is useful for local testing and demos. A signed installer can be added later.
+
+## MindSide Extension Development
+
+Install and build the extension:
+
+```bash
+cd apps/extension
+npm install
+npm run build
+```
+
+Load the extension in Chrome:
+
+1. Open `chrome://extensions`.
+2. Enable Developer Mode.
+3. Click "Load unpacked".
+4. Select `apps/extension/dist`.
+
+Useful extension commands:
+
+```bash
+cd apps/extension
+npm run typecheck
+npm run build
+```
 
 ## Running On Startup
 
@@ -195,6 +276,9 @@ npm run build
 - Add a polished demo GIF for the README.
 - Add packaging for a proper Windows installer.
 - Add optional offline model support.
+- Manually validate MindSide on Google Meet.
+- Add speaker detection and live action-item extraction to MindSide.
+- Add document and screen modes to MindSide after the meeting MVP is stable.
 
 ## LinkedIn Post Angle
 
@@ -206,6 +290,7 @@ This project is a practical demo of a screen-aware AI assistant:
 - Multimodal AI integration.
 - Streaming AI UI.
 - Product-focused UX for a small always-available overlay.
+- Chrome extension engineering with Manifest V3, side panels, tab audio capture, and offscreen documents.
 
 ## License
 
