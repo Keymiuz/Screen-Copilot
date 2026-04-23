@@ -1,7 +1,7 @@
 import type { InlineAttachment } from './googleClient'
 
 const MAX_TEXT_BYTES = 2_000_000
-const MAX_PDF_BYTES = 8_000_000
+const MAX_EXTERNAL_FILE_BYTES = 100_000_000
 const MAX_TEXT_CHARS = 120_000
 
 export interface RemoteDocument {
@@ -27,6 +27,35 @@ function normalizeUrl(input: string): URL {
   }
 
   return url
+}
+
+function normalizeKnownFileUrl(url: URL): URL {
+  if (url.hostname.toLowerCase() !== 'github.com') {
+    return url
+  }
+
+  const segments = url.pathname.split('/').filter(Boolean)
+
+  if (segments.length < 5 || segments[2] !== 'blob') {
+    return url
+  }
+
+  const [owner, repo, , ref, ...filePath] = segments
+  const rawUrl = new URL(
+    `https://raw.githubusercontent.com/${owner}/${repo}/${ref}/${filePath.join('/')}`
+  )
+  rawUrl.search = url.search
+  rawUrl.hash = url.hash
+
+  return rawUrl
+}
+
+function decodeUrlPathPart(value: string): string {
+  try {
+    return decodeURIComponent(value)
+  } catch {
+    return value
+  }
 }
 
 function decodeHtmlEntities(value: string): string {
@@ -124,12 +153,35 @@ async function readResponseBytes(response: Response, maxBytes: number): Promise<
   return bytes
 }
 
-function contentTypeIsPdf(contentType: string, url: URL): boolean {
-  return contentType.includes('application/pdf') || url.pathname.toLowerCase().endsWith('.pdf')
+function urlPathLooksPdf(url: URL): boolean {
+  return url.pathname.toLowerCase().endsWith('.pdf')
+}
+
+function responseLooksPdf(contentType: string, url: URL): boolean {
+  if (contentType.includes('html')) {
+    return false
+  }
+
+  return (
+    contentType.includes('application/pdf') ||
+    (urlPathLooksPdf(url) &&
+      (!contentType ||
+        contentType.includes('application/octet-stream') ||
+        contentType.includes('binary/octet-stream')))
+  )
+}
+
+function getContentLength(response: Response): number {
+  return Number(response.headers.get('content-length') ?? 0)
+}
+
+function getFileTitle(url: URL): string {
+  const filename = url.pathname.split('/').filter(Boolean).pop()
+  return filename ? decodeUrlPathPart(filename) : url.hostname
 }
 
 export async function fetchRemoteDocument(input: string): Promise<RemoteDocument> {
-  const url = normalizeUrl(input)
+  const url = normalizeKnownFileUrl(normalizeUrl(input))
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), 18_000)
 
@@ -149,16 +201,21 @@ export async function fetchRemoteDocument(input: string): Promise<RemoteDocument
 
     const contentType = response.headers.get('content-type')?.split(';')[0]?.trim().toLowerCase() ?? ''
 
-    if (contentTypeIsPdf(contentType, url)) {
-      const bytes = await readResponseBytes(response, MAX_PDF_BYTES)
+    if (responseLooksPdf(contentType, url)) {
+      const contentLength = getContentLength(response)
+      await response.body?.cancel().catch(() => undefined)
+
+      if (contentLength > MAX_EXTERNAL_FILE_BYTES) {
+        throw new Error('Esse PDF e grande demais para o Gemini buscar direto pela URL.')
+      }
 
       return {
         url: response.url || url.toString(),
-        title: url.pathname.split('/').filter(Boolean).pop() || url.hostname,
-        contentType: contentType || 'application/pdf',
+        title: getFileTitle(url),
+        contentType: 'application/pdf',
         attachment: {
           mimeType: 'application/pdf',
-          data: Buffer.from(bytes).toString('base64')
+          fileUri: response.url || url.toString()
         }
       }
     }
