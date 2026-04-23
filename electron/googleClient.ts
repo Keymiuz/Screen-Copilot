@@ -24,6 +24,10 @@ interface GeminiPart {
     mimeType: string
     data: string
   }
+  fileData?: {
+    mimeType: string
+    fileUri: string
+  }
 }
 
 interface GeminiContent {
@@ -33,7 +37,8 @@ interface GeminiContent {
 
 export interface InlineAttachment {
   mimeType: string
-  data: string
+  data?: string
+  fileUri?: string
 }
 
 interface GroundingChunk {
@@ -92,18 +97,48 @@ function buildContents(input: StreamGeminiQueryInput): GeminiContent[] {
   }
 
   for (const attachment of input.attachments ?? []) {
-    currentParts.push({
-      inlineData: {
-        mimeType: attachment.mimeType,
-        data: attachment.data
-      }
-    })
+    if (attachment.fileUri) {
+      currentParts.push({
+        fileData: {
+          mimeType: attachment.mimeType,
+          fileUri: attachment.fileUri
+        }
+      })
+      continue
+    }
+
+    if (attachment.data) {
+      currentParts.push({
+        inlineData: {
+          mimeType: attachment.mimeType,
+          data: attachment.data
+        }
+      })
+    }
   }
 
   currentParts.push({ text: input.userMessage })
   contents.push({ role: 'user', parts: currentParts })
 
   return contents
+}
+
+function extractGeminiErrorMessage(body: string): string {
+  if (!body) {
+    return ''
+  }
+
+  try {
+    const parsed = JSON.parse(body) as {
+      error?: {
+        message?: string
+      }
+    }
+
+    return parsed.error?.message?.trim() ?? ''
+  } catch {
+    return body.trim()
+  }
 }
 
 function extractResponseChunk(data: string): {
@@ -152,8 +187,12 @@ function formatGroundingSources(sources: GroundingChunk[]): string {
 }
 
 function toFriendlyHttpError(status: number, body: string): string {
+  const apiMessage = extractGeminiErrorMessage(body)
+
   if (status === 400) {
-    return 'A chamada para o Gemini foi rejeitada. Verifique se a chave e o modelo estao corretos.'
+    return apiMessage
+      ? `A chamada para o Gemini foi rejeitada: ${apiMessage}`
+      : 'A chamada para o Gemini foi rejeitada. Verifique se a chave, o modelo e a URL estao corretos.'
   }
 
   if (status === 401 || status === 403) {
@@ -164,7 +203,7 @@ function toFriendlyHttpError(status: number, body: string): string {
     return 'Limite de uso do Gemini atingido. Tente novamente em alguns minutos.'
   }
 
-  return `O Gemini retornou erro ${status}${body ? `: ${body.slice(0, 240)}` : '.'}`
+  return `O Gemini retornou erro ${status}${apiMessage ? `: ${apiMessage}` : body ? `: ${body.slice(0, 240)}` : '.'}`
 }
 
 export async function* streamGeminiQuery(input: StreamGeminiQueryInput): AsyncGenerator<string> {
