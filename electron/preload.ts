@@ -53,6 +53,11 @@ interface ChatErrorPayload {
   message: string
 }
 
+interface WindowState {
+  conversationMode: boolean
+  pinned: boolean
+}
+
 type Unsubscribe = () => void
 
 function subscribe<T>(channel: string, callback: (payload: T) => void): Unsubscribe {
@@ -86,7 +91,13 @@ contextBridge.exposeInMainWorld('screenMind', {
   saveSettings: (settings: AppSettings): Promise<AppSettings> =>
     ipcRenderer.invoke('settings:save', settings),
   hideOverlay: (): Promise<void> => ipcRenderer.invoke('overlay:hide'),
+  minimizeWindow: (): Promise<void> => ipcRenderer.invoke('window:minimize'),
+  getWindowState: (): Promise<WindowState> => ipcRenderer.invoke('window:get-state'),
+  toggleConversationMode: (): Promise<WindowState> =>
+    ipcRenderer.invoke('window:toggle-conversation-mode'),
   setPinned: (pinned: boolean): Promise<boolean> => ipcRenderer.invoke('overlay:set-pinned', pinned),
+  onWindowState: (callback: (payload: WindowState) => void): Unsubscribe =>
+    subscribe('window:state', callback),
   onOverlayFlash: (callback: () => void): Unsubscribe => subscribe('overlay:flash', callback),
   onOpenSettings: (callback: () => void): Unsubscribe => subscribe('settings:open', callback)
 })

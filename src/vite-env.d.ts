@@ -7,7 +7,8 @@ import type {
   SendMessagePayload,
   StreamDonePayload,
   SummarizeUrlPayload,
-  TokenPayload
+  TokenPayload,
+  WindowState
 } from './types'
 
 type Unsubscribe = () => void
@@ -26,7 +27,11 @@ declare global {
       getSettings: () => Promise<AppSettings>
       saveSettings: (settings: AppSettings) => Promise<AppSettings>
       hideOverlay: () => Promise<void>
+      minimizeWindow: () => Promise<void>
+      getWindowState: () => Promise<WindowState>
+      toggleConversationMode: () => Promise<WindowState>
       setPinned: (pinned: boolean) => Promise<boolean>
+      onWindowState: (callback: (payload: WindowState) => void) => Unsubscribe
       onOverlayFlash: (callback: () => void) => Unsubscribe
       onOpenSettings: (callback: () => void) => Unsubscribe
     }

@@ -30,6 +30,7 @@ export function Overlay(): JSX.Element {
   const [webSearchEnabled, setWebSearchEnabled] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [isPinned, setIsPinned] = useState(true)
+  const [conversationMode, setConversationMode] = useState(false)
   const listEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
 
@@ -41,6 +42,21 @@ export function Overlay(): JSX.Element {
     window.screenMind.getSettings().then(setSettings).catch(() => undefined)
     return window.screenMind.onOpenSettings(() => setSettingsOpen(true))
   }, [setSettings])
+
+  useEffect(() => {
+    window.screenMind
+      .getWindowState()
+      .then((state) => {
+        setConversationMode(state.conversationMode)
+        setIsPinned(state.pinned)
+      })
+      .catch(() => undefined)
+
+    return window.screenMind.onWindowState((state) => {
+      setConversationMode(state.conversationMode)
+      setIsPinned(state.pinned)
+    })
+  }, [])
 
   useEffect(() => {
     listEndRef.current?.scrollIntoView({ block: 'end' })
@@ -113,10 +129,17 @@ export function Overlay(): JSX.Element {
     setIsPinned(await window.screenMind.setPinned(nextPinned))
   }
 
+  async function handleConversationMode(): Promise<void> {
+    const nextState = await window.screenMind.toggleConversationMode()
+    setConversationMode(nextState.conversationMode)
+    setIsPinned(nextState.pinned)
+  }
+
   return (
     <main
       className={[
-        'relative flex h-screen w-screen flex-col overflow-hidden rounded-xl border border-white/10 bg-surface-glass text-zinc-100 shadow-overlay backdrop-blur-2xl',
+        'relative flex h-screen w-screen flex-col overflow-hidden border border-white/10 bg-surface-glass text-zinc-100 shadow-overlay backdrop-blur-2xl',
+        conversationMode ? 'rounded-none' : 'rounded-xl',
         'animate-overlayIn',
         flash ? 'animate-borderFlash' : ''
       ].join(' ')}
@@ -128,7 +151,9 @@ export function Overlay(): JSX.Element {
           </div>
           <div className="min-w-0">
             <h1 className="truncate text-sm font-semibold tracking-normal text-white">ScreenMind</h1>
-            <p className="text-[11px] text-zinc-400">Copiloto de tela</p>
+            <p className="text-[11px] text-zinc-400">
+              {conversationMode ? 'Modo conversa' : 'Copiloto de tela'}
+            </p>
           </div>
         </div>
 
@@ -137,6 +162,26 @@ export function Overlay(): JSX.Element {
             model={settings.googleModel}
             hasApiKey={Boolean(settings.googleApiKey)}
           />
+          <button
+            type="button"
+            onClick={() => void handleConversationMode()}
+            className={`app-region-no-drag grid h-8 w-8 place-items-center rounded-md transition ${
+              conversationMode
+                ? 'bg-cyan-300/20 text-cyan-200'
+                : 'text-zinc-400 hover:bg-white/10 hover:text-white'
+            }`}
+            title={conversationMode ? 'Voltar ao modo compacto' : 'Modo conversa em tela cheia'}
+          >
+            {conversationMode ? <CompactIcon /> : <ExpandIcon />}
+          </button>
+          <button
+            type="button"
+            onClick={() => void window.screenMind.minimizeWindow()}
+            className="app-region-no-drag grid h-8 w-8 place-items-center rounded-md text-zinc-400 transition hover:bg-white/10 hover:text-white"
+            title="Minimizar"
+          >
+            <MinimizeIcon />
+          </button>
           <button
             type="button"
             onClick={() => void handlePin()}
@@ -158,11 +203,18 @@ export function Overlay(): JSX.Element {
         </div>
       </header>
 
-      <section className="border-b border-white/10 p-4">
-        <ScreenThumb screenshot={lastScreenshot} isCapturing={isCapturing} onCapture={() => void capture()} />
-      </section>
+      {!conversationMode ? (
+        <section className="border-b border-white/10 p-4">
+          <ScreenThumb screenshot={lastScreenshot} isCapturing={isCapturing} onCapture={() => void capture()} />
+        </section>
+      ) : null}
 
-      <section className="scrollbar-soft flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 py-4">
+      <section
+        className={[
+          'scrollbar-soft flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto',
+          conversationMode ? 'px-6 py-6 md:px-10' : 'px-4 py-4'
+        ].join(' ')}
+      >
         {messages.length === 0 ? (
           <div className="flex h-full flex-col justify-center">
             <p className="text-sm font-medium text-zinc-200">Pergunte sobre a tela, uma URL ou a web.</p>
@@ -176,14 +228,17 @@ export function Overlay(): JSX.Element {
         <div ref={listEndRef} />
       </section>
 
-      <form onSubmit={(event) => void handleSubmit(event)} className="border-t border-white/10 p-3">
+      <form
+        onSubmit={(event) => void handleSubmit(event)}
+        className={`border-t border-white/10 ${conversationMode ? 'p-5 md:px-10' : 'p-3'}`}
+      >
         <div className="flex items-end gap-2">
           <textarea
             ref={inputRef}
             value={input}
             onChange={(event) => setInput(event.target.value)}
             onKeyDown={handleInputKeyDown}
-            rows={2}
+            rows={conversationMode ? 3 : 2}
             placeholder="Pergunte ou cole uma URL/PDF..."
             className="app-region-no-drag min-h-12 flex-1 resize-none rounded-lg border border-white/10 bg-black/25 px-3 py-2 text-sm leading-relaxed text-zinc-100 outline-none transition placeholder:text-zinc-500 focus:border-cyan-300"
           />
@@ -219,16 +274,18 @@ export function Overlay(): JSX.Element {
         </div>
       </form>
 
-      <footer className="flex h-9 items-center justify-between px-4 text-[11px] text-zinc-500">
-        <span>{tokenCount} tokens aprox.</span>
-        <button
-          type="button"
-          onClick={() => setSettingsOpen(true)}
-          className="app-region-no-drag text-zinc-400 transition hover:text-cyan-200"
-        >
-          Configuracoes
-        </button>
-      </footer>
+      {!conversationMode ? (
+        <footer className="flex h-9 items-center justify-between px-4 text-[11px] text-zinc-500">
+          <span>{tokenCount} tokens aprox.</span>
+          <button
+            type="button"
+            onClick={() => setSettingsOpen(true)}
+            className="app-region-no-drag text-zinc-400 transition hover:text-cyan-200"
+          >
+            Configuracoes
+          </button>
+        </footer>
+      ) : null}
 
       <SettingsPanel
         open={settingsOpen}
@@ -267,6 +324,42 @@ function CloseIcon(): JSX.Element {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
       <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+function MinimizeIcon(): JSX.Element {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M6 12h12" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+function ExpandIcon(): JSX.Element {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M8 4H4v4M16 4h4v4M4 16v4h4M20 16v4h-4"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
+function CompactIcon(): JSX.Element {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
     </svg>
   )
 }
