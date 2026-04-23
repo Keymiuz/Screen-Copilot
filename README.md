@@ -267,31 +267,6 @@ npm run typecheck
 npm run build
 ```
 
-## Roadmap
-
-- Add a first-run onboarding flow.
-- Add a toggle to start automatically with Windows.
-- Persist chat history locally.
-- Add screenshot retention controls.
-- Add a polished demo GIF for the README.
-- Add packaging for a proper Windows installer.
-- Add optional offline model support.
-- Manually validate MindSide on Google Meet.
-- Add speaker detection and live action-item extraction to MindSide.
-- Add document and screen modes to MindSide after the meeting MVP is stable.
-
-## LinkedIn Post Angle
-
-This project is a practical demo of a screen-aware AI assistant:
-
-- Desktop app engineering with Electron.
-- Secure process separation with preload IPC.
-- Real-time screenshot capture and image optimization.
-- Multimodal AI integration.
-- Streaming AI UI.
-- Product-focused UX for a small always-available overlay.
-- Chrome extension engineering with Manifest V3, side panels, tab audio capture, and offscreen documents.
-
 ## License
 
 MIT
