@@ -34,6 +34,7 @@ interface SendMessagePayload {
 
 interface SummarizeUrlPayload {
   url: string
+  userInstruction?: string
   useGoogleSearch?: boolean
   history?: SendMessagePayload['history']
 }

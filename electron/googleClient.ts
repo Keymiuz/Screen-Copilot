@@ -24,9 +24,9 @@ interface GeminiPart {
     mimeType: string
     data: string
   }
-  fileData?: {
-    mimeType: string
-    fileUri: string
+  file_data?: {
+    mime_type: string
+    file_uri: string
   }
 }
 
@@ -99,9 +99,9 @@ function buildContents(input: StreamGeminiQueryInput): GeminiContent[] {
   for (const attachment of input.attachments ?? []) {
     if (attachment.fileUri) {
       currentParts.push({
-        fileData: {
-          mimeType: attachment.mimeType,
-          fileUri: attachment.fileUri
+        file_data: {
+          mime_type: attachment.mimeType,
+          file_uri: attachment.fileUri
         }
       })
       continue

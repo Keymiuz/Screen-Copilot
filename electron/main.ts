@@ -49,6 +49,7 @@ interface SendMessagePayload {
 
 interface SummarizeUrlPayload {
   url: string
+  userInstruction?: string
   useGoogleSearch?: boolean
   history?: SendMessagePayload['history']
 }
@@ -374,14 +375,29 @@ function streamCloudResponse(streamId: string, payload: SendMessagePayload): voi
   })()
 }
 
-function buildUrlSummaryPrompt(document: Awaited<ReturnType<typeof fetchRemoteDocument>>): string {
+function buildUrlSummaryPrompt(
+  document: Awaited<ReturnType<typeof fetchRemoteDocument>>,
+  userInstruction?: string
+): string {
+  const instruction = userInstruction?.trim()
+  const instructionBlock = instruction
+    ? ['Pedido do usuario:', instruction, ''].join('\n')
+    : ''
+  const attachmentTask = instruction
+    ? 'Analise o documento anexado em portugues brasileiro e responda ao pedido do usuario.'
+    : 'Resuma o documento anexado em portugues brasileiro.'
+  const textTask = instruction
+    ? 'Analise o conteudo da URL abaixo em portugues brasileiro e responda ao pedido do usuario.'
+    : 'Resuma o conteudo da URL abaixo em portugues brasileiro.'
+
   if (document.attachment) {
     return [
-      'Resuma o documento anexado em portugues brasileiro.',
+      instructionBlock,
+      attachmentTask,
       `URL: ${document.url}`,
       `Titulo/arquivo: ${document.title}`,
       '',
-      'Formato desejado:',
+      instruction ? 'Formato sugerido se o usuario nao pediu outro:' : 'Formato desejado:',
       '- 4 a 6 bullets com os pontos principais.',
       '- Dados, precos, prazos ou numeros importantes quando existirem.',
       '- Uma frase final com a conclusao pratica.',
@@ -390,11 +406,12 @@ function buildUrlSummaryPrompt(document: Awaited<ReturnType<typeof fetchRemoteDo
   }
 
   return [
-    'Resuma o conteudo da URL abaixo em portugues brasileiro.',
+    instructionBlock,
+    textTask,
     `URL: ${document.url}`,
     `Titulo: ${document.title}`,
     '',
-    'Formato desejado:',
+    instruction ? 'Formato sugerido se o usuario nao pediu outro:' : 'Formato desejado:',
     '- 4 a 6 bullets com os pontos principais.',
     '- Dados, precos, prazos ou numeros importantes quando existirem.',
     '- Uma frase final com a conclusao pratica.',
@@ -418,7 +435,7 @@ function streamUrlSummaryResponse(streamId: string, payload: SummarizeUrlPayload
 
       for await (const token of streamGeminiQuery({
         settings: getSettings(),
-        userMessage: buildUrlSummaryPrompt(document),
+        userMessage: buildUrlSummaryPrompt(document, payload.userInstruction),
         attachments: document.attachment ? [document.attachment] : undefined,
         useGoogleSearch: payload.useGoogleSearch,
         history: payload.history ?? []
