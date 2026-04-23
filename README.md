@@ -339,17 +339,6 @@ Isso vem da conta/projeto da API key. Aguarde a janela de quota ou use uma chave
 - Confirme que a aba é Meet, Teams web ou Zoom web.
 - Recarregue a extensão depois de cada build.
 
-## Roadmap
-
-- Melhor persistência e busca no histórico de conversas.
-- Controles de retenção local.
-- Indicador visual mais forte de quando screenshots/documentos serão enviados.
-- Melhor tratamento de documentos grandes.
-- Exportação de conversas e resumos.
-- Speaker diarization no MindSide.
-- Extração ao vivo de decisões e action items.
-- Modo local/offline para modelos compatíveis.
-
 ## License
 
 MIT
