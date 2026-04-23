@@ -40,6 +40,7 @@ export interface SendMessagePayload {
 
 export interface SummarizeUrlPayload {
   url: string
+  userInstruction?: string
   useGoogleSearch?: boolean
   history?: Array<Pick<ChatMessage, 'role' | 'content'>>
 }

@@ -12,7 +12,10 @@ function createId(prefix: string): string {
 
 export function useChat(): {
   sendMessage: (message: string, options?: { useGoogleSearch?: boolean }) => Promise<void>
-  summarizeUrl: (url: string, options?: { useGoogleSearch?: boolean }) => Promise<void>
+  summarizeUrl: (
+    url: string,
+    options?: { useGoogleSearch?: boolean; instruction?: string }
+  ) => Promise<void>
 } {
   const streamMap = useRef(new Map<string, string>())
 
@@ -144,16 +147,18 @@ export function useChat(): {
   )
 
   const summarizeUrl = useCallback(
-    async (url: string, options?: { useGoogleSearch?: boolean }) => {
+    async (url: string, options?: { useGoogleSearch?: boolean; instruction?: string }) => {
       const trimmed = url.trim()
+      const userContent = options?.instruction?.trim() || `Resumir URL: ${trimmed}`
 
       if (!trimmed) {
         return
       }
 
-      await startAssistantStream(`Resumir URL: ${trimmed}`, (history) =>
+      await startAssistantStream(userContent, (history) =>
         window.screenMind.summarizeUrl({
           url: trimmed,
+          userInstruction: userContent,
           useGoogleSearch: options?.useGoogleSearch,
           history
         })

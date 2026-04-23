@@ -1,6 +1,7 @@
 import type { InlineAttachment } from './googleClient'
 
 const MAX_TEXT_BYTES = 2_000_000
+const MAX_INLINE_FILE_BYTES = 20_000_000
 const MAX_EXTERNAL_FILE_BYTES = 100_000_000
 const MAX_TEXT_CHARS = 120_000
 
@@ -30,24 +31,39 @@ function normalizeUrl(input: string): URL {
 }
 
 function normalizeKnownFileUrl(url: URL): URL {
-  if (url.hostname.toLowerCase() !== 'github.com') {
-    return url
+  const hostname = url.hostname.toLowerCase()
+
+  if (hostname === 'github.com') {
+    const segments = url.pathname.split('/').filter(Boolean)
+
+    if (segments.length < 5 || segments[2] !== 'blob') {
+      return url
+    }
+
+    const [owner, repo, , ref, ...filePath] = segments
+    const rawUrl = new URL(
+      `https://raw.githubusercontent.com/${owner}/${repo}/${ref}/${filePath.join('/')}`
+    )
+    rawUrl.search = url.search
+    rawUrl.hash = url.hash
+
+    return rawUrl
   }
 
-  const segments = url.pathname.split('/').filter(Boolean)
+  if (hostname === 'drive.google.com') {
+    const segments = url.pathname.split('/').filter(Boolean)
+    const fileIndex = segments.indexOf('d')
+    const fileId =
+      fileIndex >= 0
+        ? segments[fileIndex + 1]
+        : url.searchParams.get('id') ?? url.searchParams.get('fileid')
 
-  if (segments.length < 5 || segments[2] !== 'blob') {
-    return url
+    if (fileId) {
+      return new URL(`https://drive.google.com/uc?export=download&id=${encodeURIComponent(fileId)}`)
+    }
   }
 
-  const [owner, repo, , ref, ...filePath] = segments
-  const rawUrl = new URL(
-    `https://raw.githubusercontent.com/${owner}/${repo}/${ref}/${filePath.join('/')}`
-  )
-  rawUrl.search = url.search
-  rawUrl.hash = url.hash
-
-  return rawUrl
+  return url
 }
 
 function decodeUrlPathPart(value: string): string {
@@ -157,13 +173,22 @@ function urlPathLooksPdf(url: URL): boolean {
   return url.pathname.toLowerCase().endsWith('.pdf')
 }
 
-function responseLooksPdf(contentType: string, url: URL): boolean {
+function getContentDispositionFilename(response: Response): string {
+  const disposition = response.headers.get('content-disposition') ?? ''
+  const utf8Filename = disposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1]
+  const filename = utf8Filename ?? disposition.match(/filename="?([^";]+)"?/i)?.[1]
+
+  return filename ? decodeUrlPathPart(filename.trim()) : ''
+}
+
+function responseLooksPdf(contentType: string, url: URL, filename: string): boolean {
   if (contentType.includes('html')) {
     return false
   }
 
   return (
     contentType.includes('application/pdf') ||
+    filename.toLowerCase().endsWith('.pdf') ||
     (urlPathLooksPdf(url) &&
       (!contentType ||
         contentType.includes('application/octet-stream') ||
@@ -178,6 +203,16 @@ function getContentLength(response: Response): number {
 function getFileTitle(url: URL): string {
   const filename = url.pathname.split('/').filter(Boolean).pop()
   return filename ? decodeUrlPathPart(filename) : url.hostname
+}
+
+function shouldInlinePdf(url: URL, contentLength: number): boolean {
+  const hostname = url.hostname.toLowerCase()
+
+  return (
+    contentLength <= MAX_INLINE_FILE_BYTES ||
+    hostname === 'drive.google.com' ||
+    hostname === 'drive.usercontent.google.com'
+  )
 }
 
 export async function fetchRemoteDocument(input: string): Promise<RemoteDocument> {
@@ -200,18 +235,34 @@ export async function fetchRemoteDocument(input: string): Promise<RemoteDocument
     }
 
     const contentType = response.headers.get('content-type')?.split(';')[0]?.trim().toLowerCase() ?? ''
+    const filename = getContentDispositionFilename(response)
 
-    if (responseLooksPdf(contentType, url)) {
+    if (responseLooksPdf(contentType, url, filename)) {
       const contentLength = getContentLength(response)
-      await response.body?.cancel().catch(() => undefined)
 
       if (contentLength > MAX_EXTERNAL_FILE_BYTES) {
         throw new Error('Esse PDF e grande demais para o Gemini buscar direto pela URL.')
       }
 
+      if (shouldInlinePdf(url, contentLength)) {
+        const bytes = await readResponseBytes(response, MAX_INLINE_FILE_BYTES)
+
+        return {
+          url: response.url || url.toString(),
+          title: filename || getFileTitle(url),
+          contentType: 'application/pdf',
+          attachment: {
+            mimeType: 'application/pdf',
+            data: Buffer.from(bytes).toString('base64')
+          }
+        }
+      }
+
+      await response.body?.cancel().catch(() => undefined)
+
       return {
         url: response.url || url.toString(),
-        title: getFileTitle(url),
+        title: filename || getFileTitle(url),
         contentType: 'application/pdf',
         attachment: {
           mimeType: 'application/pdf',
