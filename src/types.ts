@@ -45,6 +45,11 @@ export interface SummarizeUrlPayload {
   history?: Array<Pick<ChatMessage, 'role' | 'content'>>
 }
 
+export interface WindowState {
+  conversationMode: boolean
+  pinned: boolean
+}
+
 export interface TokenPayload {
   streamId: string
   token: string

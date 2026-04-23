@@ -54,6 +54,11 @@ interface SummarizeUrlPayload {
   history?: SendMessagePayload['history']
 }
 
+interface WindowStatePayload {
+  conversationMode: boolean
+  pinned: boolean
+}
+
 const WINDOW_SIZE = {
   width: 480,
   height: 600
@@ -103,6 +108,8 @@ let tray: Tray | null = null
 let isQuitting = false
 let registeredHotkey = ''
 let settingsStore: SettingsStore | null = null
+let isPinned = true
+let conversationMode = false
 
 async function initializeSettingsStore(): Promise<void> {
   const { default: Store } = await import('electron-store')
@@ -199,14 +206,37 @@ function resolveOverlayBounds(): Electron.Rectangle {
   }
 }
 
+function resolveConversationBounds(): Electron.Rectangle {
+  const cursorPoint = screen.getCursorScreenPoint()
+  const display = screen.getDisplayNearestPoint(cursorPoint)
+
+  return {
+    width: display.workArea.width,
+    height: display.workArea.height,
+    x: display.workArea.x,
+    y: display.workArea.y
+  }
+}
+
+function getWindowState(): WindowStatePayload {
+  return {
+    conversationMode,
+    pinned: isPinned
+  }
+}
+
+function broadcastWindowState(): void {
+  overlayWindow?.webContents.send('window:state', getWindowState())
+}
+
 function createOverlayWindow(): BrowserWindow {
   const window = new BrowserWindow({
     ...resolveOverlayBounds(),
     show: false,
     frame: false,
     transparent: true,
-    resizable: false,
-    alwaysOnTop: true,
+    resizable: true,
+    alwaysOnTop: isPinned,
     skipTaskbar: false,
     backgroundColor: '#00000000',
     webPreferences: {
@@ -237,11 +267,17 @@ function createOverlayWindow(): BrowserWindow {
 function showOverlayInactive(): void {
   const window = overlayWindow ?? createOverlayWindow()
 
-  window.setBounds(resolveOverlayBounds())
-  window.setAlwaysOnTop(true, 'floating')
+  window.setBounds(conversationMode ? resolveConversationBounds() : resolveOverlayBounds())
+  window.setAlwaysOnTop(conversationMode ? false : isPinned, 'floating')
 
   if (window.isMinimized()) {
     window.restore()
+  }
+
+  if (conversationMode) {
+    window.show()
+    window.focus()
+    return
   }
 
   window.showInactive()
@@ -249,6 +285,28 @@ function showOverlayInactive(): void {
 
 function hideOverlay(): void {
   overlayWindow?.hide()
+}
+
+function minimizeWindow(): void {
+  overlayWindow?.minimize()
+}
+
+function setConversationMode(nextConversationMode: boolean): WindowStatePayload {
+  const window = overlayWindow ?? createOverlayWindow()
+  conversationMode = nextConversationMode
+
+  window.setBounds(conversationMode ? resolveConversationBounds() : resolveOverlayBounds())
+  window.setAlwaysOnTop(conversationMode ? false : isPinned, 'floating')
+
+  if (window.isMinimized()) {
+    window.restore()
+  }
+
+  window.show()
+  window.focus()
+  broadcastWindowState()
+
+  return getWindowState()
 }
 
 async function captureAndBroadcast(): Promise<ScreenshotPayload | null> {
@@ -478,9 +536,25 @@ function registerIpcHandlers(): void {
     hideOverlay()
   })
 
+  ipcMain.handle('window:minimize', () => {
+    minimizeWindow()
+  })
+
+  ipcMain.handle('window:get-state', () => getWindowState())
+
+  ipcMain.handle('window:toggle-conversation-mode', () =>
+    setConversationMode(!conversationMode)
+  )
+
   ipcMain.handle('overlay:set-pinned', (_event, pinned: boolean) => {
-    overlayWindow?.setAlwaysOnTop(pinned, 'floating')
-    return pinned
+    isPinned = pinned
+
+    if (!conversationMode) {
+      overlayWindow?.setAlwaysOnTop(isPinned, 'floating')
+    }
+
+    broadcastWindowState()
+    return isPinned
   })
 }
 
