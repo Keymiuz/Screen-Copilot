@@ -6,9 +6,9 @@ This first MVP focuses only on meetings. Document mode and screen mode are plann
 
 ## What It Does
 
-- Opens a native Chrome Side Panel.
+- Opens a native Chrome Side Panel from the toolbar icon.
 - Detects Google Meet, Microsoft Teams web, and Zoom web tabs.
-- Captures audio from the active meeting tab after the user clicks Start.
+- Captures audio from the active meeting tab after the user clicks the extension icon on that tab and then clicks Start.
 - Records short `audio/webm` chunks in an offscreen document.
 - Sends chunks to Gemini for Portuguese transcription.
 - Shows a live transcript feed.
@@ -43,11 +43,13 @@ gemini-2.5-flash
 
 1. Open a normal webpage and click the extension icon. The panel should say meeting capture is unavailable.
 2. Open a Google Meet tab.
-3. Click the extension icon.
+3. Click the MindSide extension icon in the Chrome toolbar while the meeting tab is active. This matters because Chrome only allows `tabCapture` after the extension is invoked for that tab.
 4. Click Start capture.
 5. Speak or play meeting audio.
 6. Wait for transcript chunks.
 7. Click Stop and confirm a summary is generated.
+
+Chrome pages such as `chrome://extensions`, `chrome://newtab`, and `chrome-extension://...` cannot be captured by Chrome. Always test capture from an `https://meet.google.com/...`, `https://teams.microsoft.com/...`, or `https://*.zoom.us/wc/...` tab.
 
 ## Notes
 

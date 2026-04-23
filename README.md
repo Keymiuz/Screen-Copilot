@@ -23,7 +23,7 @@ ScreenMind desktop:
 MindSide meeting extension:
 
 - Open a Google Meet, Microsoft Teams web, or Zoom web tab.
-- Open the Chrome side panel.
+- Click the MindSide Chrome toolbar icon while the meeting tab is active.
 - Start meeting capture.
 - Watch transcript chunks appear.
 - Stop and generate a markdown summary.
@@ -89,23 +89,25 @@ flowchart LR
 
 ### MindSide Meeting Extension
 
-1. The extension action opens a native Chrome Side Panel.
+1. The user clicks the extension action while the meeting tab is active.
 2. The background service worker detects whether the active tab is a meeting.
-3. The user explicitly starts capture.
-4. The background worker creates an offscreen document and requests a tab audio stream ID.
-5. The offscreen document records short audio chunks with `MediaRecorder`.
-6. The background worker sends each audio chunk to Gemini for transcription.
-7. The side panel displays transcript chunks and generates a summary after Stop.
+3. The extension action opens a native Chrome Side Panel and records that Chrome has granted `activeTab` for the meeting tab.
+4. The user explicitly starts capture.
+5. The background worker creates an offscreen document and requests a tab audio stream ID.
+6. The offscreen document records short audio chunks with `MediaRecorder`.
+7. The background worker sends each audio chunk to Gemini for transcription.
+8. The side panel displays transcript chunks and generates a summary after Stop.
 
 ```mermaid
 flowchart LR
-  A["Chrome side panel"] --> B["Background service worker"]
-  B --> C["tabCapture stream ID"]
-  C --> D["Offscreen MediaRecorder"]
-  D --> E["audio/webm chunks"]
-  E --> F["Gemini transcription"]
-  F --> G["Transcript feed"]
-  G --> H["Final summary"]
+  A["Toolbar click on meeting tab"] --> B["Chrome side panel"]
+  B --> C["Background service worker"]
+  C --> D["tabCapture stream ID"]
+  D --> E["Offscreen MediaRecorder"]
+  E --> F["audio/webm chunks"]
+  F --> G["Gemini transcription"]
+  G --> H["Transcript feed"]
+  H --> I["Final summary"]
 ```
 
 ## Tech Stack
@@ -235,6 +237,8 @@ Load the extension in Chrome:
 2. Enable Developer Mode.
 3. Click "Load unpacked".
 4. Select `apps/extension/dist`.
+
+To test capture, open a real meeting URL first, then click the MindSide toolbar icon while that meeting tab is active. Chrome only grants `tabCapture` for tabs where the extension was invoked. Starting from a side panel that was opened from `chrome://extensions`, `chrome://newtab`, or another browser page will fail because Chrome pages cannot be captured.
 
 Useful extension commands:
 

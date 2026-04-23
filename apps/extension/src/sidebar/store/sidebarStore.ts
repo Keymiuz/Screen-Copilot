@@ -8,6 +8,7 @@ export const DEFAULT_RUNTIME_STATE: RuntimeState = {
     provider: 'unsupported',
     isMeeting: false
   },
+  canCaptureActiveTab: false,
   status: 'idle',
   startedAt: null,
   transcript: [],

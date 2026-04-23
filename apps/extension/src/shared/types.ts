@@ -30,6 +30,7 @@ export interface SettingsDraft {
 
 export interface RuntimeState {
   activeTab: ActiveTabContext
+  canCaptureActiveTab: boolean
   status: RecordingStatus
   startedAt: number | null
   transcript: TranscriptEntry[]

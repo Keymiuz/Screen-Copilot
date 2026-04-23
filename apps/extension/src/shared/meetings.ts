@@ -1,6 +1,10 @@
 import type { ActiveTabContext, MeetingProvider } from './types'
 
 export function detectMeetingProvider(url: string): MeetingProvider {
+  if (!url.startsWith('http://') && !url.startsWith('https://')) {
+    return 'unsupported'
+  }
+
   if (url.includes('meet.google.com')) {
     return 'google-meet'
   }

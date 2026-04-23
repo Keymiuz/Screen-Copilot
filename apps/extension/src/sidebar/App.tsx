@@ -30,7 +30,11 @@ export function App(): JSX.Element {
 
   const isBusy =
     runtime.status === 'starting' || runtime.status === 'stopping' || runtime.status === 'summarizing'
-  const canStart = runtime.activeTab.isMeeting && publicSettings.hasGoogleApiKey && runtime.status !== 'recording'
+  const canStart =
+    runtime.activeTab.isMeeting &&
+    runtime.canCaptureActiveTab &&
+    publicSettings.hasGoogleApiKey &&
+    runtime.status !== 'recording'
   const canStop = runtime.status === 'recording' || runtime.status === 'starting'
 
   useEffect(() => {
@@ -110,6 +114,12 @@ export function App(): JSX.Element {
 
         {!runtime.activeTab.isMeeting ? (
           <Notice tone="neutral" text="Open Google Meet, Microsoft Teams web, or Zoom web to enable capture." />
+        ) : null}
+        {runtime.activeTab.isMeeting && !runtime.canCaptureActiveTab ? (
+          <Notice
+            tone="warning"
+            text="Click the MindSide toolbar icon while this meeting tab is active, then start capture from here."
+          />
         ) : null}
         {!publicSettings.hasGoogleApiKey ? (
           <Notice tone="warning" text="Add a Google API key in settings before recording." />

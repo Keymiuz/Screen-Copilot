@@ -21,12 +21,15 @@ let state: RuntimeState = {
     provider: 'unsupported',
     isMeeting: false
   },
+  canCaptureActiveTab: false,
   status: 'idle',
   startedAt: null,
   transcript: [],
   summary: '',
   error: ''
 }
+
+let captureGrantTabId: number | null = null
 
 function createId(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`
@@ -58,7 +61,23 @@ async function getActiveTab(): Promise<chrome.tabs.Tab | undefined> {
 async function refreshActiveTabContext(): Promise<ActiveTabContext> {
   const tab = await getActiveTab()
   const activeTab = createTabContext(tab)
-  setState({ activeTab })
+  const canCaptureActiveTab = Boolean(activeTab.tabId && activeTab.tabId === captureGrantTabId)
+  setState({ activeTab, canCaptureActiveTab })
+
+  return activeTab
+}
+
+function registerActionInvocation(tab: chrome.tabs.Tab): ActiveTabContext {
+  const activeTab = createTabContext(tab)
+  captureGrantTabId = activeTab.isMeeting && activeTab.tabId ? activeTab.tabId : null
+
+  setState({
+    activeTab,
+    canCaptureActiveTab: Boolean(captureGrantTabId),
+    error: activeTab.isMeeting
+      ? ''
+      : 'Abra uma aba de Google Meet, Teams ou Zoom Web e clique no icone MindSide antes de iniciar.'
+  })
 
   return activeTab
 }
@@ -102,6 +121,16 @@ async function startMeetingCapture(): Promise<RuntimeState> {
 
   if (!activeTab.isMeeting || !activeTab.tabId) {
     throw new Error('Abra uma aba de Google Meet, Teams ou Zoom Web antes de iniciar a captura.')
+  }
+
+  if (!activeTab.url.startsWith('http://') && !activeTab.url.startsWith('https://')) {
+    throw new Error('O Chrome nao permite capturar paginas internas como chrome:// ou chrome-extension://.')
+  }
+
+  if (captureGrantTabId !== activeTab.tabId) {
+    throw new Error(
+      'Clique no icone MindSide na barra do Chrome enquanto a aba da reuniao estiver ativa. Depois aperte Start capture.'
+    )
   }
 
   const settings = await getPublicSettings()
@@ -252,11 +281,13 @@ async function handleSidebarMessage(
 }
 
 chrome.runtime.onInstalled.addListener(() => {
-  void chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true })
+  void chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: false })
   void refreshActiveTabContext()
 })
 
 chrome.action.onClicked.addListener((tab) => {
+  registerActionInvocation(tab)
+
   if (tab.windowId) {
     void chrome.sidePanel.open({ windowId: tab.windowId })
   }
@@ -266,7 +297,11 @@ chrome.tabs.onActivated.addListener(() => {
   void refreshActiveTabContext()
 })
 
-chrome.tabs.onUpdated.addListener((_tabId, changeInfo) => {
+chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
+  if (tabId === captureGrantTabId && changeInfo.url) {
+    captureGrantTabId = null
+  }
+
   if (changeInfo.status === 'complete' || changeInfo.url || changeInfo.title) {
     void refreshActiveTabContext()
   }
